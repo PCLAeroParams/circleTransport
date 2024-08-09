@@ -6,8 +6,12 @@ Designed to mimic E3SM transport on the circle.
 
 ## Getting started
 
-### Installation
+- Set up a virtual environment for this project:
+```
+  cd circleTransport
+  python -m venv .venv
+  . .venv/bin/activate
+```
 
-Ideally, simply running `pip3 install -r requirements-dev.txt` should be enough to get these scripts running.
-
-
+- Make sure you have a good python configuration. Ideally, simply running `pip3 install -r requirements-dev.txt` should be enough to get these scripts running.
+- Install the pre-commit hooks: `pre-commit install`
