@@ -130,9 +130,10 @@ class CircleNp4:
   def check_circle(self):
     fp_tol = 1e-15
     circumference_rel_err = (self.arc_circumference() - 2*np.pi)/(2*np.pi)
+    print(f"cord circumference = {self.cord_circumference()}")
     if circumference_rel_err < fp_tol:
       print(f"circumference check (success): arc_circumference = {2*np.pi}")
-    else:
+    else: # pragma: no cover
       print(f"circumference check (ERROR): arc_circumference = {self.arc_circumference()}; rel. err.: {circumference_rel_err}")
 
 

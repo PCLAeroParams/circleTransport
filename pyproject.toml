@@ -11,3 +11,12 @@ exclude = ""
 addopts = "-ra --cov"
 testpaths = ["tests"]
 pythonpath = ['.']
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.html]
+directory="coverage_html_report"
+
+[tool.coverage.report]
+show_missing=true
