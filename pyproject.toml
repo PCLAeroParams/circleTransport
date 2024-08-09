@@ -2,6 +2,11 @@
 line-length = 125
 ignore = ["D203"]
 
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402"]
+"context.py" = ["E402", "F403"]
+"*/{tests}/*" = ["E402"]
+
 [tool.black]
 line-length = 125
 target-version = ["py39"]
