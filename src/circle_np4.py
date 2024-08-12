@@ -16,7 +16,7 @@ class CircleNp4:
           [cordx, cordy] array of x coordinates, array of y coordinates for mapped points
         """
         cordx = 0.5 * ((1 - s) * x1 + (1 + s) * x2)
-        cordy = 0.5 * ((1 - s) * x1 + (1 + s) * x2)
+        cordy = 0.5 * ((1 - s) * y1 + (1 + s) * y2)
         return (cordx, cordy)
 
     @staticmethod

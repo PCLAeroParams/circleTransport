@@ -39,9 +39,9 @@ unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 # ignore import errors in __init__.py and test files
-"__init__.py" = ["E402"]
-"context.py" = ["E402", "F403"]
-"*/{tests}/*" = ["E402"]
+"__init__.py" = ["E402", "F403"]
+"context.py" = ["E402", "F403", "F401"]
+"**/{tests}/*" = ["E402","F405", "F403"]
 
 [tool.ruff.format]
 indent-style = "space"
