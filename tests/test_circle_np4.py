@@ -8,7 +8,8 @@ def test_circle():
     nes = [6, 12, 24]
     for ne in nes:
         circ = CircleNp4(ne)
-        circ.check_circle()
+        nerr = circ.check_circle()
+        assert nerr == 0
         assert circ.arc_circumference() == pytest.approx(2 * np.pi, rel=1e-15)
 
 
