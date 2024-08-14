@@ -1,4 +1,4 @@
-from . import CircleNp4
+from .circle_np4 import CircleNp4
 import numpy as np
 
 

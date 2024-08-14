@@ -39,7 +39,7 @@ unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 # ignore import errors in __init__.py and test files
-"__init__.py" = ["E402", "F403"]
+"__init__.py" = ["E402", "F403", "F401"]
 "context.py" = ["E402", "F403", "F401"]
 "**/{tests}/*" = ["E402","F405", "F403"]
 
@@ -66,3 +66,4 @@ directory="coverage_html_report"
 
 [tool.coverage.report]
 show_missing=true
+skip_covered = true

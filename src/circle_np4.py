@@ -142,7 +142,7 @@ class CircleNp4:
         for k in range(self.ne):
             theta_diffs[0] = abs(self.elem_theta[k] - self.node_theta[self.elems[k, 0]])
             theta_diffs[1] = abs(self.elem_theta[k + 1] - self.node_theta[self.elems[k, 3]])
-            if np.sum(theta_diffs) > fp_tol:
+            if np.sum(theta_diffs) > fp_tol:  # pragma: no cover
                 nerr += 1
         return nerr
 
@@ -153,14 +153,14 @@ class CircleNp4:
         left_in = -1
         right_in = -1
         for k in range(self.ne):
-            if theta_left >= self.elem_theta[k] and theta_left <= self.elem_theta[k + 1]:
+            if theta_left >= self.elem_theta[k] and theta_left < self.elem_theta[k + 1]:
                 left_in = k
-            if theta_right >= self.elem_theta[k] and theta_right <= self.elem_theta[k + 1]:
+            if theta_right > self.elem_theta[k] and theta_right <= self.elem_theta[k + 1]:
                 right_in = k
             if left_in >= 0 and right_in >= 0:
                 break
-        assert left_in >= 0
-        assert right_in >= 0
+        assert left_in >= 0  # pragma: no cover
+        assert right_in >= 0  # pragma: no cover
         return (left_in, right_in)
 
     def reset_theta(self):
@@ -217,13 +217,8 @@ class CircleNp4:
         nstr = f"CircleNp4: ne = {self.ne}, np = {self.np}\n"
         qstr = f"   qp = {self.qp}\n   qw = {self.qw}\n"
         result = nstr + qstr
-        if self.ne <= 24:
-            elem_str = "   elem_theta: " + repr(self.elem_theta) + "\n"
-            ex_str = "   elem_x:" + repr(self.elem_x) + "\n"
-            ey_str = "   elem_y:" + repr(self.elem_y) + "\n"
-            node_str = "   node_theta: " + repr(self.node_theta) + "\n"
-            nx_str = "   node_x:" + repr(self.node_arc_x) + "\n"
-            ny_str = "   node_y:" + repr(self.node_arc_y) + "\n"
-            elem_ids = "   elems : " + repr(self.elems) + "\n"
-            result += elem_str + ex_str + ey_str + node_str + nx_str + ny_str + elem_ids
+        elem_str = "   elem_theta: " + repr(self.elem_theta) + "\n"
+        node_str = "   node_theta: " + repr(self.node_theta) + "\n"
+        elem_ids = "   elems : " + repr(self.elems) + "\n"
+        result += elem_str + node_str + elem_ids
         return result
