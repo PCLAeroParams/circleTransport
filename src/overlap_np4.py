@@ -9,6 +9,10 @@ class OverlapNp4:
     """
 
     def check_positive_arc_length(self):
+        """
+        All arc lengths must be positive; this counts the number of elements
+        that are not, and returns that number of errors.
+        """
         nerr = 0
         for k in range(self.ne):
             if self.elem_arc_len[k] <= 0:  # pragma: no cover
@@ -17,9 +21,15 @@ class OverlapNp4:
         return nerr
 
     def circumference(self):
+        """
+        Returns the circumference, computed as the sum of arc lengths.
+        """
         return np.sum(self.elem_arc_len)
 
     def check_circumference(self):
+        """
+        Checks that the circumference matchs 2*pi, within floating point roundoff
+        """
         nerr = 0
         fp_tol = 1e-14
         if abs(self.circumference() - 2 * np.pi) > fp_tol:  # pragma: no cover
@@ -41,23 +51,24 @@ class OverlapNp4:
     def __init__(self, circ0: CircleNp4, circ1: AdvectedCircle):
         self.elem0 = []  # self.elem0[k] gives the index, in circ0, that corresponds to overlap element k
         self.elem1 = []  # self.elem1[k] gives the index, in circ1, that corresponds to overlap element k
-        self.elem_theta = []  # placeholder; will be overwritten
-        self.elem_arc_len = []
+        self.elem_arc_len = []  # placeholder; will be overwritten
         self.node_theta = []  # placeholder; will be overwritten
         self.elems = []  # placeholder; will be overwritten
-        self.elem_x = []
-        self.elem_y = []
+        self.elem_x = []  # placeholder; will be overwritten
+        self.elem_y = []  # placeholder; will be overwritten
         self.theta_a = []  # left endpoints of overlap elements
         self.theta_b = []  # right endpoints of overlap elements
-        self.node_cord_x = []
-        self.node_cord_y = []
-        self.node_arc_x = []
-        self.node_arc_y = []
+        self.node_cord_x = []  # placeholder; will be overwritten
+        self.node_cord_y = []  # placeholder; will be overwritten
+        self.node_arc_x = []  # placeholder; will be overwritten
+        self.node_arc_y = []  # placeholder; will be overwritten
         self.ne = 0
         self.np = circ0.np
         self.qp = circ0.qp.copy()
         self.qw = circ0.qw.copy()
+        self.high_order_gll = circ0.high_order_gll
         self.build_overlap(circ0, circ1)
+        self.map_to_reference_coordinates(circ0, circ1)
 
     def build_overlap(self, circ0: CircleNp4, circ1: AdvectedCircle):
         #
@@ -78,9 +89,6 @@ class OverlapNp4:
             # right endpoint of moved element
             theta_right = circ1.elem_theta[k1 + 1]
 
-            # record the indices of the circ0 elements that contain circ1 element k1's boundaries
-            left_in = -1
-            right_in = -1
             if theta_left >= -np.pi and theta_right <= np.pi:
                 #
                 # case 1: moved element does not encounter periodic domain boundaries
@@ -88,9 +96,6 @@ class OverlapNp4:
                 (left_in, right_in) = circ0.theta_vals_in_element(theta_left, theta_right)
 
                 circ0_index_span = range(left_in, right_in + 1)
-                n_elems_in_span = right_in - left_in + 1
-                assert n_elems_in_span == len(circ0_index_span)
-
                 for k0 in circ0_index_span:
                     self.elem0.append(k0)
                     self.elem1.append(k1)
@@ -99,6 +104,7 @@ class OverlapNp4:
                     print(
                         f"case 1: overlap elem {ov_idx} is adv. elem {k1} / static elem {k0} theta_left {theta_left} theta_a {self.theta_a[-1]} left_in {left_in} theta_right {theta_right} theta_b {self.theta_b[-1]} right_in {right_in}"
                     )
+                    assert self.theta_b[-1] - self.theta_a[-1] > 0
                     ov_idx += 1
 
             elif theta_left < -np.pi and theta_right >= -np.pi:
@@ -131,6 +137,7 @@ class OverlapNp4:
                     print(
                         f"case 2: overlap elem {ov_idx} is adv. elem {k1} / static elem {k0} theta_left {theta_left} theta_a {self.theta_a[-1]} left_in {left_in} theta_right {theta_right} theta_b {self.theta_b[-1]} right_in {right_in}"
                     )
+                    assert self.theta_b[-1] - self.theta_a[-1] > 0
                     ov_idx += 1
 
             elif theta_left <= np.pi and theta_right > np.pi:
@@ -154,19 +161,20 @@ class OverlapNp4:
                     self.elem0.append(k0)
                     self.elem1.append(k1)
                     if circ0_bndry_flag[i]:
-                        self.theta_a.append(circ0.node_theta[circ0.elems[-k0, 0]] + 2 * np.pi)
-                        self.theta_b.append(min(theta_right, circ0.node_theta[circ0.elems[-k0, 3]] + 2 * np.pi))
+                        self.theta_a.append(circ0.node_theta[circ0.elems[k0, 0]] + 2 * np.pi)
+                        self.theta_b.append(min(theta_right, circ0.node_theta[circ0.elems[k0, 3]] + 2 * np.pi))
                     else:
                         self.theta_a.append(max(theta_left, circ0.node_theta[circ0.elems[k0, 0]]))
                         self.theta_b.append(circ0.node_theta[circ0.elems[k0, 3]])
                     print(
                         f"case 3: overlap elem {ov_idx} is adv. elem {k1} / static elem {k0} theta_left {theta_left} theta_a {self.theta_a[-1]} left_in {left_in} theta_right {theta_right} theta_b {self.theta_b[-1]} right_in {right_in}"
                     )
+                    assert self.theta_b[-1] - self.theta_a[-1] > 0
                     ov_idx += 1
 
             elif theta_left < -np.pi and theta_right <= -np.pi:
                 #
-                # case 4: moved element crossed left boundary (-pi)
+                # case 4: whole element crossed left boundary (-pi)
                 #
                 theta_left += 2 * np.pi
                 theta_right += 2 * np.pi
@@ -174,15 +182,16 @@ class OverlapNp4:
                 theta_left -= 2 * np.pi
                 theta_right -= 2 * np.pi
 
-                circ0_index_span = -np.array(range(left_in, right_in + 1), dtype=int)
+                circ0_index_span = range(left_in, right_in + 1)
                 for k0 in circ0_index_span:
                     self.elem0.append(k0)
                     self.elem1.append(k1)
-                    self.theta_a.append(max(theta_left, circ0.node_theta[circ0.elems[-k0, 0]] - 2 * np.pi))
-                    self.theta_b.append(min(theta_right, circ0.node_theta[circ0.elems[-k0, 3]] - 2 * np.pi))
+                    self.theta_a.append(max(theta_left, circ0.node_theta[circ0.elems[k0, 0]] - 2 * np.pi))
+                    self.theta_b.append(min(theta_right, circ0.node_theta[circ0.elems[k0, 3]] - 2 * np.pi))
                     print(
                         f"case 4: overlap elem {ov_idx} is adv. elem {k1} / static elem {k0} theta_left {theta_left} theta_a {self.theta_a[-1]} left_in {left_in} theta_right {theta_right} theta_b {self.theta_b[-1]} right_in {right_in}"
                     )
+                    assert self.theta_b[-1] - self.theta_a[-1] > 0
                     ov_idx += 1
 
             elif theta_left >= np.pi and theta_right > np.pi:
@@ -195,18 +204,22 @@ class OverlapNp4:
                 theta_left += 2 * np.pi
                 theta_right += 2 * np.pi
 
-                circ0_index_span = -np.array(range(left_in, right_in + 1), dtype=int)
+                circ0_index_span = range(left_in, right_in + 1)
                 for k0 in circ0_index_span:
                     self.elem0.append(k0)
                     self.elem1.append(k1)
-                    self.theta_a.append(max(theta_left, circ0.node_theta[circ0.elems[-k0, 0]] + 2 * np.pi))
-                    self.theta_b.append(min(theta_right, circ0.node_theta[circ0.elems[-k0, 3]] + 2 * np.pi))
+                    self.theta_a.append(max(theta_left, circ0.node_theta[circ0.elems[k0, 0]] + 2 * np.pi))
+                    self.theta_b.append(min(theta_right, circ0.node_theta[circ0.elems[k0, 3]] + 2 * np.pi))
                     print(
                         f"case 5: overlap elem {ov_idx} is adv. elem {k1} / static elem {k0} theta_left {theta_left} theta_a {self.theta_a[-1]} left_in {left_in} theta_right {theta_right} theta_b {self.theta_b[-1]} right_in {right_in}"
                     )
+                    assert self.theta_b[-1] - self.theta_a[-1] > 0
                     ov_idx += 1
             else:  # pragma: no cover
                 raise RuntimeError("ERROR: unanticipated case.")
+        #
+        # Following the above loop, all overlap element arrays should be the same length
+        #
         assert len(self.theta_a) == len(self.theta_b)
         assert len(self.theta_a) == len(self.elem0)
         assert len(self.theta_a) == len(self.elem1)
@@ -225,10 +238,6 @@ class OverlapNp4:
         #
         for k2 in range(self.ne):
             self.elem_arc_len.append(self.elem_theta[k2 + 1] - self.elem_theta[k2])
-
-        print(f"elem_theta: {repr(self.elem_theta)}")
-        print(f"elem_arc_len: {repr(self.elem_arc_len)}")
-
         #
         # define overlap elements in (x,y) space
         #
@@ -239,7 +248,9 @@ class OverlapNp4:
         # reset theta with atan2
         #
         self.elem_theta = np.atan2(self.elem_y, self.elem_x)
-
+        #
+        # Check that circumference = 2pi and that all arc lengths are positive
+        #
         nerr = self.check_positive_arc_length()
         nerr += self.check_circumference()
         assert nerr == 0
@@ -260,6 +271,12 @@ class OverlapNp4:
         self.node_arc_y = np.zeros(self.nn)
         self.node_arc_jac = np.zeros(self.nn)
         self.elems = np.zeros((self.ne, self.np), dtype=int)
+        self.len_tgt = np.zeros(self.ne)
+        self.len_src = np.zeros(self.ne)
+        self.elem_x_tgt = np.zeros((self.ne, 2))
+        self.elem_y_tgt = np.zeros((self.ne, 2))
+        self.elem_x_src = np.zeros((self.ne, 2))
+        self.elem_y_src = np.zeros((self.ne, 2))
         for k2 in range(self.ne):
             node_range_start = node_j
             node_range_end = node_j + self.np
@@ -277,3 +294,51 @@ class OverlapNp4:
             )
             self.elems[k2, :] = range(node_range_start, node_range_end)
             node_j += self.np - 1
+
+    def check_overlap(self):
+        nerr = 0
+        circumference = np.sum(self.elem_arc_len)
+        fp_tol = 1e-15
+        rel_circ_err = abs(circumference - 2 * np.pi) / (2 * np.pi)
+        if rel_circ_err > fp_tol:
+            nerr += 1
+        return nerr
+
+    def map_to_reference_coordinates(self, circ0: CircleNp4, circ1: AdvectedCircle):
+        """
+        Determines the reference coordinates of each overlap element relative to both
+        input meshes.
+        """
+
+        for overlap_kl in range(self.ne):
+            k0 = self.elem0[overlap_kl]  # index of remap target element in circ0
+            l1 = self.elem1[overlap_kl]  # index of remap source element in circ1
+            ov_theta_left = self.theta_a[overlap_kl]
+            ov_theta_right = self.theta_b[overlap_kl]
+            #
+            # find endpoints of overlap element kl in reference space relative to target
+            # circ0 element k0
+            #
+            (x0, y0) = (circ0.node_arc_x[circ0.elems[k0, 0]], circ0.node_arc_y[circ0.elems[k0, 0]])
+            (x1, y1) = (circ0.node_arc_x[circ0.elems[k0, 3]], circ0.node_arc_y[circ0.elems[k0, 3]])
+            tgt_s0 = CircleNp4.arc_to_reference_map(ov_theta_left, x0, y0, x1, y1)
+            tgt_s1 = CircleNp4.arc_to_reference_map(ov_theta_right, x0, y0, x1, y1)
+            (klx0, kly0) = CircleNp4.reference_to_cord_map(tgt_s0, x0, y0, x1, y1)
+            (klx1, kly1) = CircleNp4.reference_to_cord_map(tgt_s1, x0, y0, x1, y1)
+            self.len_tgt[overlap_kl] = np.sqrt((klx1 - klx0) ** 2 + (kly1 - kly0) ** 2)
+            self.elem_x_tgt[overlap_kl, :] = (klx0, klx1)
+            self.elem_y_tgt[overlap_kl, :] = (kly0, kly1)
+
+            #
+            # find endpoints of overlap element kl in reference space relative to source
+            # circ1 element l1
+            #
+            (x0, y0) = (circ1.node_arc_x[circ1.elems[l1, 0]], circ1.node_arc_y[circ1.elems[l1, 0]])
+            (x1, y1) = (circ1.node_arc_x[circ1.elems[l1, 3]], circ1.node_arc_y[circ1.elems[l1, 3]])
+            src_s0 = CircleNp4.arc_to_reference_map(ov_theta_left, x0, y0, x1, y1)
+            src_s1 = CircleNp4.arc_to_reference_map(ov_theta_right, x0, y0, x1, y1)
+            (klx0, kly0) = CircleNp4.reference_to_cord_map(src_s0, x0, y0, x1, y1)
+            (klx1, kly1) = CircleNp4.reference_to_cord_map(src_s1, x0, y0, x1, y1)
+            self.len_src[overlap_kl] = np.sqrt((klx1 - klx0) ** 2 + (kly1 - kly0) ** 2)
+            self.elem_x_src[overlap_kl, :] = (klx0, klx1)
+            self.elem_y_src[overlap_kl, :] = (kly0, kly1)

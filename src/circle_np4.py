@@ -1,4 +1,6 @@
 import numpy as np
+from .gll4 import GLL4
+from .gll12 import GLL12
 
 
 class CircleNp4:
@@ -40,7 +42,7 @@ class CircleNp4:
     @staticmethod
     def arc_to_reference_map(theta, x0: float, y0: float, x1: float, y1: float):
         """
-        Given a point on the unit circle, with coordinate theta, contained in the element
+        Given a point on the unit circle with coordinate theta, contained in the element
         whose endpoints are given, find the corresponding reference element coordinate in [-1,1]
 
         input:
@@ -56,6 +58,7 @@ class CircleNp4:
         m = dy / dx
         ax = np.cos(theta)
         ay = np.sin(theta)
+
         rth = (y0 - m * x0) / (ay - m * ax)
         x = rth * ax
         y = rth * ay
@@ -64,52 +67,55 @@ class CircleNp4:
         pts_dot = x0 * x + y0 * y
 
         s = (2 * pts_dot - norm0sq - cord_dot) / (cord_dot - norm0sq)
+
         return s
 
     def __init__(self, ne):
         # --------------------------
         # global attributes
         # --------------------------
-        self.np = 4
-        self.ne = ne
-        self.qp = np.array([-1, -1 / np.sqrt(5.0), 1 / np.sqrt(5.0), 1])
-        self.qw = np.array([1.0 / 6, 5.0 / 6, 5.0 / 6, 1.0 / 6])
-        self.nn = (self.np - 1) * ne + 1
+        self.np = 4  # number of GLL nodes per element
+        self.ne = ne  # number of elements on circle
+        self.nn = (self.np - 1) * ne + 1  # number of nodes
+        self.qp = GLL4.qp()  # quadrature points in reference element
+        self.qw = GLL4.qw()  # quadrature weights in reference element
+
         # --------------------------
         # node attributes
         # --------------------------
-        self.node_cord_x = np.zeros(self.nn)
-        self.node_cord_y = np.zeros(self.nn)
-        self.node_arc_x = np.zeros(self.nn)
-        self.node_arc_y = np.zeros(self.nn)
-        self.node_arc_jac = np.zeros(self.nn)
+        self.node_arc_x = np.zeros(self.nn)  # x-coordinates of mesh nodes on arcs
+        self.node_arc_y = np.zeros(self.nn)  # y-coordinates of mesh nodes on arcs
+
         # --------------------------
         # element attributes
         # --------------------------
-        self.elem_theta = np.linspace(-np.pi, np.pi, ne + 1)
-        self.elem_x = np.cos(self.elem_theta)
-        self.elem_y = np.sin(self.elem_theta)
+        self.elem_theta = np.linspace(-np.pi, np.pi, ne + 1)  # theta-coordinates of element boundaries
+        self.elem_x = np.cos(self.elem_theta)  # x-coordinates of element boundaries
+        self.elem_y = np.sin(self.elem_theta)  # y-coordinates of element boundaries
         elem_dth = 2 * np.pi / ne
-        self.elems = np.zeros((self.ne, self.np), dtype=int)
-        self.elem_cord_len = np.zeros(ne)
-        self.elem_arc_len = elem_dth * np.ones(ne)
+        self.elems = np.zeros((self.ne, self.np), dtype=int)  # element-to-node connectivity
+        self.elem_arc_len = elem_dth * np.ones(ne)  # arc length of elements
+        self.mass_matrices = np.zeros((self.ne, self.np, self.np))
+
         # --------------------------
         # mesh construction
         # --------------------------
         self.build_elems_from_boundaries()
-        self.reset_theta()
-
-    def cord_circumference(self):
-        """
-        return the sum of all cord lengths
-        """
-        return np.sum(self.elem_cord_len)
+        self.high_order_gll = GLL12
+        self.build_mass_matrices(self.high_order_gll)
+        self.reset_theta_from_xy()
 
     def arc_circumference(self):
         """
         return the sum of all arc lengths
         """
         return np.sum(self.elem_arc_len)
+
+    def gll_circumference(self):
+        result = 0
+        for k in range(self.ne):
+            result += np.sum(self.high_order_gll.qw() * 0.5 * self.elem_arc_len[k])
+        return result
 
     def check_circle(self, test_level=0):
         """
@@ -125,13 +131,20 @@ class CircleNp4:
         #
         # Test circumference of circle = 2*pi
         #
-        circumference_rel_err = (self.arc_circumference() - 2 * np.pi) / (2 * np.pi)
-        print(f"cord circumference = {self.cord_circumference()}")
+        circumference_rel_err = abs(self.arc_circumference() - 2 * np.pi) / (2 * np.pi)
         if circumference_rel_err < fp_tol:
             print(f"circumference check (success): arc_circumference = {2*np.pi}")
         else:  # pragma: no cover
             print(
                 f"circumference check (ERROR): arc_circumference = {self.arc_circumference()}; rel. err.: {circumference_rel_err}"
+            )
+            nerr += 1
+        circumference_rel_err = abs(self.gll_circumference() - 2 * np.pi) / (2 * np.pi)
+        if circumference_rel_err < fp_tol:
+            print(f"circumference check (success): gll_circumference = {2*np.pi}")
+        else:  # pragma: no cover
+            print(
+                f"circumference check (ERROR): gll_circumference = {self.gll_circumference()}; rel. err.: {circumference_rel_err}"
             )
             nerr += 1
 
@@ -144,6 +157,7 @@ class CircleNp4:
             theta_diffs[1] = abs(self.elem_theta[k + 1] - self.node_theta[self.elems[k, 3]])
             if np.sum(theta_diffs) > fp_tol:  # pragma: no cover
                 nerr += 1
+
         return nerr
 
     def theta_vals_in_element(self, theta_left, theta_right):
@@ -163,25 +177,32 @@ class CircleNp4:
         assert right_in >= 0  # pragma: no cover
         return (left_in, right_in)
 
-    def reset_theta(self):
+    def get_elem_xy(self, k):
+        return np.array((self.elem_x[k], self.elem_y[k]))
+
+    def get_node_xy(self, elem_k, node_i):
+        return np.array((self.node_arc_x[self.elems[elem_k, node_i]], self.node_arc_y[self.elems[elem_k, node_i]]))
+
+    def reset_xy_from_theta(self):
+        """
+        reset xy coordinates from theta values
+        """
+        self.node_arc_x = np.cos(self.node_theta)
+        self.node_arc_y = np.sin(self.node_theta)
+
+    def reset_theta_from_xy(self):
         """
         Reset theta coordinates of nodes and elements to lie within [-pi, pi]
         """
         self.node_theta = np.atan2(self.node_arc_y, self.node_arc_x)
         self.elem_theta = np.atan2(self.elem_y, self.elem_x)
 
-    def update_elem_theta_from_node_theta(self):
-        """
-        Reset elem theta values to match node theta values at boundaries.
-        """
+    def reset_arc_len(self):
         for k in range(self.ne):
-            self.elem_theta[k] = self.node_theta[self.elems[k, 0]]
-        self.elem_theta[-1] = self.node_theta[-1]
-        for k in range(self.ne):
-            self.elem_arc_len[k] = self.elem_theta[k + 1] - self.elem_theta[k]
-            dx2 = (np.cos(self.elem_theta[k + 1]) - np.cos(self.elem_theta[k])) ** 2
-            dy2 = (np.sin(self.elem_theta[k + 1]) - np.sin(self.elem_theta[k])) ** 2
-            self.elem_cord_len[k] = np.sqrt(dx2 + dy2)
+            xy0 = self.get_elem_xy(k)
+            xy1 = self.get_elem_xy(k + 1)
+            dot = np.sum(xy0 * xy1)
+            self.elem_arc_len[k] = np.acos(dot)
 
     def build_elems_from_boundaries(self):
         """
@@ -198,18 +219,15 @@ class CircleNp4:
             node_range_start = node_j
             node_range_end = node_j + self.np
             dtheta_k = self.elem_theta[k + 1] - self.elem_theta[k]
+            self.elem_arc_len[k] = dtheta_k
             x1 = self.elem_x[k]
             y1 = self.elem_y[k]
             x2 = self.elem_x[k + 1]
             y2 = self.elem_y[k + 1]
-            self.elem_cord_len[k] = np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
             (cordx, cordy) = CircleNp4.reference_to_cord_map(self.qp, x1, y1, x2, y2)
             radii = np.sqrt(np.square(cordx) + np.square(cordy))
-            self.node_cord_x[node_range_start:node_range_end] = cordx
-            self.node_cord_y[node_range_start:node_range_end] = cordy
             self.node_arc_x[node_range_start:node_range_end] = cordx / radii
             self.node_arc_y[node_range_start:node_range_end] = cordy / radii
-            self.node_arc_jac[node_range_start:node_range_end] = CircleNp4.reference_to_arc_jacobian(self.qp, dtheta_k)
             self.elems[k, :] = range(node_j, node_j + self.np)
             node_j += self.np - 1
 
@@ -220,5 +238,19 @@ class CircleNp4:
         elem_str = "   elem_theta: " + repr(self.elem_theta) + "\n"
         node_str = "   node_theta: " + repr(self.node_theta) + "\n"
         elem_ids = "   elems : " + repr(self.elems) + "\n"
-        result += elem_str + node_str + elem_ids
+        arc_len = "    elem_arc_len : " + repr(self.elem_arc_len) + "\n"
+        mass_mat0 = "    A0 : " + repr(self.mass_matrices[0, :, :]) + "\n"
+        result += elem_str + node_str + elem_ids + arc_len + mass_mat0
         return result
+
+    def build_mass_matrices(self, high_order_gll):
+        qp = high_order_gll.qp()
+        qw = high_order_gll.qw()
+
+        for k in range(self.ne):
+            jac = 0.5 * self.elem_arc_len[k]
+            for i in range(self.np):
+                phi_i_vals = GLL4.gll_basis()[i](qp)
+                for j in range(self.np):
+                    phi_j_vals = GLL4.gll_basis()[j](qp)
+                    self.mass_matrices[k, i, j] = np.sum(phi_i_vals * phi_j_vals * jac * qw)
