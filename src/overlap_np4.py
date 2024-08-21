@@ -316,7 +316,7 @@ class OverlapNp4:
         """
         for kl in range(self.ne):
             k = self.elem0[kl]  # index of remap target element in circ0
-            ll = self.elem1[kl]  # index of remap source element in circ1
+            ll = self.elem1[kl]  # index of remap source element in circ1 ("ll" is easier to read, less ambiguous than "l")
             ov_theta_left = self.theta_a[kl]
             ov_theta_right = self.theta_b[kl]
             #
