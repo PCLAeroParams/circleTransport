@@ -10,37 +10,41 @@ class CircleNp4:
     """
 
     @staticmethod
-    def reference_to_cord_map(s, x1: float, y1: float, x2: float, y2: float):
+    def reference_to_cord_map(s, x0: float, y0: float, x1: float, y1: float):
         """
         Map a set of points from the reference element to a cord
 
         input:
           s: reference coordinates in [-1,1]
-          x1, y1 : x, y coordinates of cord's left endpoint
-          x2, y2 : x, y coordinates of cord's right endpoint
+          x0, y0 : x, y coordinates of cord's left endpoint
+          x1, y1 : x, y coordinates of cord's right endpoint
 
         output:
           [cordx, cordy] array of x coordinates, array of y coordinates for mapped points
         """
-        cordx = 0.5 * ((1 - s) * x1 + (1 + s) * x2)
-        cordy = 0.5 * ((1 - s) * y1 + (1 + s) * y2)
+        cordx = 0.5 * ((1 - s) * x0 + (1 + s) * x1)
+        cordy = 0.5 * ((1 - s) * y0 + (1 + s) * y1)
         return (cordx, cordy)
 
     @staticmethod
-    def reference_to_arc_jacobian(s, dtheta):
-        """
-        Computes the Jacobian determinant of the mapping from the reference element [-1,1]
-        to an arc on the unit circle.
-
-        input:
-          s : reference element coordinates
-          dtheta : arc length of the image on the unit circle
-        """
-        denom = 1 + np.square(s) + (1 - np.square(s)) * np.cos(dtheta)
-        return np.sin(dtheta) / denom
+    def reference_to_arc_map(s, x0: float, y0: float, x1: float, y1: float):
+        (cordx, cordy) = CircleNp4.reference_to_cord_map(s, x0, y0, x1, y1)
+        radii = np.sqrt(np.square(cordx) + np.square(cordy))
+        return (cordx / radii, cordy / radii)
 
     @staticmethod
-    def arc_to_reference_map(theta, x0: float, y0: float, x1: float, y1: float):
+    def reference_to_theta_map(s, x0: float, y0: float, x1: float, y1: float):
+        arg = ((1 - s) * y0 + (1 + s) * y1) / ((1 - s) * x0 + (1 + s) * x1)
+        return np.atan(arg)
+
+    @staticmethod
+    def dtheta_dr(s, x0: float, y0: float, x1: float, y1: float):
+        mk = (y1 - y0) / (x1 - x0)
+        arg = ((1 - s) * y0 + (1 + s) * y1) / ((1 - s) * x0 + (1 + s) * x1)
+        return mk / (1 + np.square(arg))
+
+    @staticmethod
+    def theta_to_reference_map(theta, x0: float, y0: float, x1: float, y1: float):
         """
         Given a point on the unit circle with coordinate theta, contained in the element
         whose endpoints are given, find the corresponding reference element coordinate in [-1,1]
@@ -62,11 +66,10 @@ class CircleNp4:
         rth = (y0 - m * x0) / (ay - m * ax)
         x = rth * ax
         y = rth * ay
-        norm0sq = x0 * x0 + y0 * y0
         cord_dot = x0 * x1 + y0 * y1
         pts_dot = x0 * x + y0 * y
 
-        s = (2 * pts_dot - norm0sq - cord_dot) / (cord_dot - norm0sq)
+        s = (2 * pts_dot - 1 - cord_dot) / (cord_dot - 1)
 
         return s
 
@@ -158,6 +161,18 @@ class CircleNp4:
             if np.sum(theta_diffs) > fp_tol:  # pragma: no cover
                 nerr += 1
 
+        #
+        # test that element mass matrices are symmetric
+        #
+        for k in range(self.ne):
+            ak = self.mass_matrices[k, :, :]
+            for i in range(self.np):
+                for j in range(i + 1, self.np):
+                    if abs(ak[i, j] - ak[j, i]) > fp_tol:  # pragma: no cover
+                        print(
+                            f"asymmetric entry found at (k,i,j) = ({k}, {i}, {j}) : ak[ij] = {ak[i,j]}, ak[j,i] = {ak[j,i]}"
+                        )
+                        nerr += 1
         return nerr
 
     def theta_vals_in_element(self, theta_left, theta_right):
@@ -248,7 +263,7 @@ class CircleNp4:
         qw = high_order_gll.qw()
 
         for k in range(self.ne):
-            jac = 0.5 * self.elem_arc_len[k]
+            jac = CircleNp4.dtheta_dr(qp, self.elem_x[k], self.elem_y[k], self.elem_x[k + 1], self.elem_y[k + 1])
             for i in range(self.np):
                 phi_i_vals = GLL4.gll_basis()[i](qp)
                 for j in range(self.np):

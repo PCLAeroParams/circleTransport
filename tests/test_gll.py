@@ -5,6 +5,7 @@ import numpy as np
 
 
 def test_gll_qw():
+    print("========== START TEST: test_gll_qw ==========")
     gll2 = GLL2()
     assert np.sum(gll2.qw()) == pytest.approx(2, rel=1e-15)
 
@@ -19,6 +20,7 @@ def test_gll_qw():
 
 
 def test_gll_qps():
+    print("========== START TEST: test_gll_qps ==========")
     glls = [GLL2(), GLL3(), GLL4()]
     for gll in glls:
         for i, phi in enumerate(gll.gll_basis()):

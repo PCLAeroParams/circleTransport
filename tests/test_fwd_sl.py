@@ -6,7 +6,9 @@ import numpy as np
 
 
 def test_fwd_sl(tmp_path: Path):
+    print("========== START TEST: test_fwd_sl ==========")
     d = tmp_path / "plots"
+    print(d)
     d.mkdir()
     ne = 6
     dt = 0.1
@@ -21,7 +23,7 @@ def test_fwd_sl(tmp_path: Path):
     assert np.sum(circ1.elem_arc_len) == pytest.approx(2 * np.pi, rel=1e-15)
     print("circ1:", repr(circ1))
 
-    plotfile = "test_plot_2circles.png"
+    plotfile = d / "test_plot_2circles.png"
     fig, ax = plt.subplots()
     plot_circle(ax)
     plot_two_CircleNp4s(ax, circ0, circ1)
